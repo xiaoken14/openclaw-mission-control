@@ -126,6 +126,11 @@ class AgentBase(SQLModel):
 class AgentCreate(AgentBase):
     """Payload for creating a new agent."""
 
+    openclaw_session_id: str | None = Field(
+        default=None,
+        description="Optional custom openclaw session key. When provided, overrides the auto-generated session key.",
+    )
+
 
 class AgentUpdate(SQLModel):
     """Payload for patching an existing agent."""

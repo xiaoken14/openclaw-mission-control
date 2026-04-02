@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose:*)",
+      "Bash(ipconfig getifaddr:*)",
+      "Bash(curl -s -X POST \"http://localhost:8000/api/v1/gateways/3ddf5e8b-06ad-4992-beae-530677557b6c/templates/sync?force_bootstrap=true&rotate_tokens=true\" -H \"Authorization: Bearer fd2c1f1c2bff7f49cf6cec3615b840d07c8b1bd9cacc2cfb0e9ad1575d8f2ed8\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s \"http://192.168.0.116:8000/healthz\")"
+    ]
+  }
+}

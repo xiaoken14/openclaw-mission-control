@@ -24,6 +24,7 @@ from app.models.boards import Board
 from app.models.gateways import Gateway
 from app.services import souls_directory
 from app.services.openclaw.constants import (
+    AGENT_SESSION_PREFIX,
     BOARD_SHARED_TEMPLATE_MAP,
     DEFAULT_CHANNEL_HEARTBEAT_VISIBILITY,
     DEFAULT_GATEWAY_FILES,
@@ -432,8 +433,13 @@ def _session_key(agent: Agent) -> str:
     """Return the deterministic session key for a board-scoped agent.
 
     Note: Never derive session keys from a human-provided name; use stable ids instead.
+    When agent.openclaw_session_id is already set to a custom value, preserve it.
     """
 
+    if agent.openclaw_session_id and not agent.openclaw_session_id.startswith(
+        f"{AGENT_SESSION_PREFIX}:mc-"
+    ):
+        return agent.openclaw_session_id
     if agent.is_board_lead and agent.board_id is not None:
         return board_lead_session_key(agent.board_id)
     return board_agent_session_key(agent.id)

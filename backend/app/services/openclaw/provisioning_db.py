@@ -47,6 +47,7 @@ from app.schemas.common import OkResponse
 from app.schemas.gateways import GatewayTemplatesSyncError, GatewayTemplatesSyncResult
 from app.services.activity_log import record_activity
 from app.services.openclaw.constants import (
+    AGENT_SESSION_PREFIX,
     _TOOLS_KV_RE,
     DEFAULT_HEARTBEAT_CONFIG,
     OFFLINE_AFTER,
@@ -791,6 +792,10 @@ class AgentLifecycleService(OpenClawDBService):
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Gateway main agent session key is required",
             )
+        if existing and not existing.startswith(
+            f"{AGENT_SESSION_PREFIX}:mc-"
+        ):
+            return existing
         if agent.is_board_lead:
             return board_lead_session_key(agent.board_id)
         return board_agent_session_key(agent.id)
@@ -1570,14 +1575,22 @@ class AgentLifecycleService(OpenClawDBService):
             requested_name=requested_name,
         )
         agent, raw_token = await self.persist_new_agent(data=data)
-        await self.provision_new_agent(
-            agent=agent,
-            board=board,
-            gateway=gateway,
-            auth_token=raw_token,
-            user=actor.user if actor.actor_type == "user" else None,
-            force_bootstrap=False,
-        )
+        custom_session = (payload.openclaw_session_id or "").strip()
+        if custom_session:
+            self.logger.info(
+                "agent.create.skip_provision agent_id=%s custom_session=%s",
+                agent.id,
+                custom_session,
+            )
+        else:
+            await self.provision_new_agent(
+                agent=agent,
+                board=board,
+                gateway=gateway,
+                auth_token=raw_token,
+                user=actor.user if actor.actor_type == "user" else None,
+                force_bootstrap=False,
+            )
         self.logger.info("agent.create.success agent_id=%s board_id=%s", agent.id, board.id)
         return self.to_agent_read(self.with_computed_status(agent))
 
@@ -1765,12 +1778,23 @@ class AgentLifecycleService(OpenClawDBService):
             )
         return await self._delete_agent_record(agent=agent)
 
+    def _has_custom_session(self, agent: Agent) -> bool:
+        """Return True when the agent uses a custom (non-auto-generated) session key."""
+        existing = (agent.openclaw_session_id or "").strip()
+        return bool(existing) and not existing.startswith(f"{AGENT_SESSION_PREFIX}:mc-")
+
     async def _delete_agent_record(self, *, agent: Agent) -> OkResponse:
         gateway: Gateway | None = None
         client_config: GatewayClientConfig | None = None
         workspace_path: str | None = None
 
-        if agent.board_id is None:
+        if self._has_custom_session(agent):
+            self.logger.info(
+                "agent.delete.skip_gateway agent_id=%s custom_session=%s",
+                agent.id,
+                agent.openclaw_session_id,
+            )
+        elif agent.board_id is None:
             # Gateway-main agents are not tied to a board; resolve via agent.gateway_id.
             gateway = await Gateway.objects.by_id(agent.gateway_id).first(self.session)
             client_config = optional_gateway_client_config(gateway)
